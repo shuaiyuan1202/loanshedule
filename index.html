@@ -18,11 +18,34 @@
 <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
     
     <!-- 头部信息 -->
-    <div class="mb-8 text-center sm:text-left">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">房贷提前还款推演系统</h1>
-        <p class="text-gray-500">
-            初始本金: 135.5万元 | 利率: 2.9% | 终点: 2051年7月 | 策略: 缩减月供，年限不变
-        </p>
+    <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div class="text-center sm:text-left">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">房贷提前还款推演系统</h1>
+            <p class="text-gray-500 text-sm">
+                初始本金: 135.5万元 | 利率: 2.9% | 终点: 2051年7月 | 策略: 缩减月供，年限不变
+            </p>
+        </div>
+        <!-- 新增：出生年月配置 -->
+        <div class="flex items-center bg-white px-4 py-3 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+            <label class="text-sm font-medium text-gray-700 whitespace-nowrap mr-2">我的出生年月:</label>
+            <input type="number" id="input-birth-year" value="1995" class="form-input w-20 rounded-md border-gray-300 border px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-blue-500 text-center font-bold text-blue-600">
+            <span class="mx-1 text-gray-500 text-sm whitespace-nowrap">年</span>
+            <select id="select-birth-month" class="w-16 rounded-md border-gray-300 border px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-blue-500 text-center font-bold text-blue-600 bg-white">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+            </select>
+            <span class="ml-1 text-gray-500 text-sm whitespace-nowrap">月</span>
+        </div>
     </div>
 
     <!-- 数据看板 -->
@@ -119,25 +142,45 @@
 
     // 状态管理：存放用户的提前还款操作 { index: 整数(距离起始的月数), amount: 金额(元) }
     let earlyRepayments = []; 
+    let birthYear = 1995; // 默认出生年份
+    let birthMonth = 1;   // 默认出生月份
     
     // 初始化时从本地存储读取历史配置
     try {
         const savedData = localStorage.getItem('mortgage_repayments_v1');
         if (savedData) {
-            earlyRepayments = JSON.parse(savedData);
+            const parsed = JSON.parse(savedData);
+            // 兼容之前只存了数组的情况
+            if (Array.isArray(parsed)) {
+                earlyRepayments = parsed;
+            } else {
+                earlyRepayments = parsed.repayments || [];
+                if (parsed.birthYear) birthYear = parsed.birthYear;
+                if (parsed.birthMonth) birthMonth = parsed.birthMonth;
+            }
         }
     } catch (e) {
         console.error('加载历史记录失败', e);
     }
 
+    // 更新页面上的输入框初始值
+    document.getElementById('input-birth-year').value = birthYear;
+    document.getElementById('select-birth-month').value = birthMonth;
+
     // 辅助函数：将配置保存到本地存储
     function saveToLocalStorage() {
-        localStorage.setItem('mortgage_repayments_v1', JSON.stringify(earlyRepayments));
+        localStorage.setItem('mortgage_repayments_v1', JSON.stringify({
+            repayments: earlyRepayments,
+            birthYear: birthYear,
+            birthMonth: birthMonth
+        }));
     }
 
     let currentSelectedIndex = 0; // 当前选中的图表月份索引
     let chartInstance = null;
     let baseTotalInterest = 0; // 基准总利息（不提前还款的情况）
+    let lastRenderedYear = -1; // 记录 ECharts 当前渲染周期内最新渲染的年份
+    let formatterResetTimer = null; // 用于重置渲染周期的防抖定时器
 
     // --- 核心数学计算 ---
     // 等额本息月供计算公式
@@ -246,7 +289,13 @@
                 trigger: 'axis',
                 formatter: function(params) {
                     let pt = params[0].data;
-                    let str = `<div class="font-bold border-b pb-1 mb-1">${pt.date}</div>`;
+                    let year = parseInt(pt.date.split('-')[0], 10);
+                    let month = parseInt(pt.date.split('-')[1], 10);
+                    
+                    // 精确计算年龄：当前年份减去出生年份，如果当前月份小于出生月份，则年龄减1
+                    let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+                    
+                    let str = `<div class="font-bold border-b pb-1 mb-1">${pt.date} <span class="text-orange-500 font-normal ml-1">(${currentAge}岁)</span></div>`;
                     str += `当月常规月供：<span class="text-blue-500 font-bold">${pt.payment.toFixed(2)}</span> 元<br/>`;
                     str += `剩余本金：${(pt.principalRemaining / 10000).toFixed(2)} 万元<br/>`;
                     if (pt.extra > 0) {
@@ -262,12 +311,38 @@
                 { type: 'inside', start: 0, end: 100 },
                 { type: 'slider', start: 0, end: 100, height: 20, bottom: 5 }
             ],
-            grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+            grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
             xAxis: {
                 type: 'category',
                 boundaryGap: false,
                 data: chartData.map(d => d.date),
-                axisLabel: { color: '#6b7280' }
+                axisLabel: { 
+                    color: '#6b7280',
+                    // 新增：智能年龄感知格式化
+                    formatter: function (value) {
+                        let parts = value.split('-');
+                        let year = parseInt(parts[0], 10);
+                        let month = parseInt(parts[1], 10);
+                        
+                        // 利用防抖定时器：在 ECharts 每次执行完完整的刻度渲染后，重置记忆状态
+                        clearTimeout(formatterResetTimer);
+                        formatterResetTimer = setTimeout(() => { lastRenderedYear = -1; }, 50);
+
+                        let str = `{year|${value}}`;
+
+                        // 确保每个渲染周期内，同一年只展示一次最早的可见月份的年龄
+                        if (year !== lastRenderedYear) {
+                            lastRenderedYear = year;
+                            let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+                            str += `\n{age|${currentAge}岁}`;
+                        }
+                        return str;
+                    },
+                    rich: {
+                        year: { color: '#6b7280', lineHeight: 22 },
+                        age: { color: '#ea580c', fontWeight: 'bold', fontSize: 11, backgroundColor: '#ffedd5', padding: [2, 5], borderRadius: 4, align: 'center' }
+                    }
+                }
             },
             yAxis: {
                 type: 'value',
@@ -345,10 +420,16 @@
             let nextPayment = chartData[item.index + 1] ? chartData[item.index + 1].payment : 0;
             let savedMonthly = currentPayment - nextPayment;
             
+            // 精确计算操作时的年龄
+            let year = parseInt(getMonthString(item.index).split('-')[0], 10);
+            let month = parseInt(getMonthString(item.index).split('-')[1], 10);
+            let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+            let ageStr = `(${currentAge}岁)`;
+
             const tr = document.createElement('tr');
             tr.className = "hover:bg-gray-50 transition";
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getMonthString(item.index)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getMonthString(item.index)} <span class="text-gray-400 text-xs ml-1">${ageStr}</span></td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-rose-600 font-bold">${(item.amount / 10000).toFixed(2)} 万元</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-emerald-600 font-bold">↓ 减少 ${savedMonthly.toFixed(2)} 元</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${nextPayment.toFixed(2)} 元</td>
@@ -360,6 +441,28 @@
         });
     }
 
+    // --- 事件监听与处理 ---
+    
+    // 监听出生年份的变化
+    document.getElementById('input-birth-year').addEventListener('change', function(e) {
+        let val = parseInt(e.target.value, 10);
+        if (!isNaN(val) && val > 1900 && val < 2100) {
+            birthYear = val;
+            saveToLocalStorage();
+            updateDashboard(); // 年份改变后重新渲染图表
+        }
+    });
+
+    // 监听出生月份的变化
+    document.getElementById('select-birth-month').addEventListener('change', function(e) {
+        let val = parseInt(e.target.value, 10);
+        if (!isNaN(val) && val >= 1 && val <= 12) {
+            birthMonth = val;
+            saveToLocalStorage();
+            updateDashboard(); // 月份改变后重新渲染图表
+        }
+    });
+
     // --- Modal 弹窗逻辑 ---
     const modal = document.getElementById('modal');
     const modalContent = document.getElementById('modal-content');
@@ -369,7 +472,11 @@
 
     function openModal(monthIndex) {
         currentSelectedIndex = monthIndex;
-        document.getElementById('modal-subtitle').innerText = `操作时间节点: ${getMonthString(monthIndex)}`;
+        let year = parseInt(getMonthString(monthIndex).split('-')[0], 10);
+        let month = parseInt(getMonthString(monthIndex).split('-')[1], 10);
+        let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+        
+        document.getElementById('modal-subtitle').innerText = `操作时间节点: ${getMonthString(monthIndex)} (${currentAge} 岁)`;
         
         // 如果该月已经有设置，填入默认值并展示清空按钮
         let exist = earlyRepayments.find(e => e.index === monthIndex);
