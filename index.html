@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>房贷提前还款推演系统</title>
+    <!-- 引入 Tailwind CSS 进行样式排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 ECharts 进行图表绘制 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f3f4f6; }
+        .modal-bg { background-color: rgba(0, 0, 0, 0.5); }
+    </style>
+</head>
+<body class="text-gray-800">
+
+<div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    
+    <!-- 头部信息 -->
+    <div class="mb-8 text-center sm:text-left">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">房贷提前还款推演系统</h1>
+        <p class="text-gray-500">
+            初始本金: 135.5万元 | 利率: 2.9% | 终点: 2051年7月 | 策略: 缩减月供，年限不变
+        </p>
+    </div>
+
+    <!-- 数据看板 -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+            <h3 class="text-sm font-medium text-gray-500">初始基准月供</h3>
+            <p class="text-2xl font-bold text-gray-900 mt-1" id="stat-initial-payment">6,296 元</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-emerald-500">
+            <h3 class="text-sm font-medium text-gray-500">当前计算后最低月供</h3>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" id="stat-final-payment">6,296 元</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-rose-500">
+            <h3 class="text-sm font-medium text-gray-500">累计为您节省利息</h3>
+            <p class="text-2xl font-bold text-rose-600 mt-1" id="stat-saved-interest">0 元</p>
+        </div>
+    </div>
+
+    <!-- 图表区 (全宽) -->
+    <div class="bg-white rounded-xl shadow-sm p-4 relative mb-6">
+        <div class="mb-2 flex justify-between items-center">
+            <h2 class="text-lg font-bold text-gray-800">月供变化曲线 (点击曲线上任意节点添加提前还款)</h2>
+            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">支持鼠标滚轮缩放</span>
+        </div>
+        <div id="chart-container" style="width: 100%; height: 500px;"></div>
+    </div>
+
+    <!-- 操作与历史记录区 (底部详情表格) -->
+    <div class="bg-white rounded-xl shadow-sm p-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">提前还款操作详情</h2>
+        
+        <div id="empty-state" class="text-center text-gray-400 py-10">
+            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <p class="mt-2 text-sm">暂无记录，请点击上方图表节点添加</p>
+        </div>
+
+        <div id="repayment-list" class="overflow-x-auto hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作时间</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">提前还款金额</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">月供减少额度</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">调整后新月供</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="history-tbody">
+                    <!-- 表格行将通过 JS 动态插入这里 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 交互弹窗 (Modal) -->
+<div id="modal" class="fixed inset-0 modal-bg flex items-center justify-center hidden z-50 opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-96 p-6 transform scale-95 transition-transform duration-300" id="modal-content">
+        <h3 class="text-xl font-bold text-gray-900 mb-1">添加提前还款</h3>
+        <p class="text-sm text-gray-500 mb-6" id="modal-subtitle">操作月份: 2026年3月</p>
+        
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">提前还款金额 (万元)</label>
+            <div class="relative rounded-md shadow-sm">
+                <input type="number" id="input-amount" class="form-input block w-full rounded-md border-gray-300 border px-4 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="例如: 3">
+                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <span class="text-gray-500 sm:text-sm">万元</span>
+                </div>
+            </div>
+            <p class="text-xs text-rose-500 mt-2 hidden" id="modal-error">请输入大于 0 的有效数字</p>
+        </div>
+
+        <div class="mt-6 flex justify-between items-center">
+            <button id="btn-delete" class="px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition hidden">清空此记录</button>
+            <div class="flex gap-3 ml-auto">
+                <button id="btn-cancel" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">取消</button>
+                <button id="btn-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md">确认执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 核心配置与状态 ---
+    const CONFIG = {
+        principal: 1355000,    // 初始本金 135.5万
+        annualRate: 0.029,     // 年化利率 2.9%
+        startYear: 2026,
+        startMonth: 3,         // 从 2026年3月算起
+        totalMonths: 304       // 到2051年7月正好剩余 304 个月
+    };
+
+    // 状态管理：存放用户的提前还款操作 { index: 整数(距离起始的月数), amount: 金额(元) }
+    let earlyRepayments = []; 
+    
+    // 初始化时从本地存储读取历史配置
+    try {
+        const savedData = localStorage.getItem('mortgage_repayments_v1');
+        if (savedData) {
+            earlyRepayments = JSON.parse(savedData);
+        }
+    } catch (e) {
+        console.error('加载历史记录失败', e);
+    }
+
+    // 辅助函数：将配置保存到本地存储
+    function saveToLocalStorage() {
+        localStorage.setItem('mortgage_repayments_v1', JSON.stringify(earlyRepayments));
+    }
+
+    let currentSelectedIndex = 0; // 当前选中的图表月份索引
+    let chartInstance = null;
+    let baseTotalInterest = 0; // 基准总利息（不提前还款的情况）
+
+    // --- 核心数学计算 ---
+    // 等额本息月供计算公式
+    function calculatePMT(principal, monthlyRate, months) {
+        if (principal <= 0) return 0;
+        return principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+    }
+
+    // 将月索引转换为 YYYY-MM 格式
+    function getMonthString(index) {
+        let y = CONFIG.startYear + Math.floor((CONFIG.startMonth - 1 + index) / 12);
+        let m = ((CONFIG.startMonth - 1 + index) % 12) + 1;
+        return `${y}-${m.toString().padStart(2, '0')}`;
+    }
+
+    // 生成整个周期的推演数据
+    function generateSimulationData() {
+        let p = CONFIG.principal;
+        let r = CONFIG.annualRate / 12;
+        let n = CONFIG.totalMonths;
+        
+        let currentPMT = calculatePMT(p, r, n);
+        let data = [];
+        let totalInterestPaid = 0;
+
+        for (let i = 0; i < CONFIG.totalMonths; i++) {
+            if (p <= 0) break; // 已还清
+
+            let interest = p * r;
+            let normalPrincipalPaid = currentPMT - interest;
+            
+            // 查找当月是否有提前还款操作
+            let earlyObj = earlyRepayments.find(e => e.index === i);
+            let earlyExtra = earlyObj ? earlyObj.amount : 0;
+
+            // 记录当月数据 (出图用)
+            data.push({
+                index: i,
+                date: getMonthString(i),
+                payment: currentPMT, // 本月月供
+                principalRemaining: p,
+                extra: earlyExtra
+            });
+
+            // 结算当月本金
+            totalInterestPaid += interest;
+            p -= normalPrincipalPaid;
+            
+            if (earlyExtra > 0) {
+                p -= earlyExtra;
+                if (p < 0) p = 0; // 防止负数本金
+                // 缩减月供核心逻辑：年限不变，按照剩余本金和剩余期数重新计算月供
+                let remainingMonths = CONFIG.totalMonths - i - 1;
+                if (remainingMonths > 0) {
+                    currentPMT = calculatePMT(p, r, remainingMonths);
+                }
+            }
+        }
+
+        return { chartData: data, totalInterestPaid };
+    }
+
+    // --- UI 与 交互 ---
+    
+    // 初始化图表
+    function initChart() {
+        chartInstance = echarts.init(document.getElementById('chart-container'));
+        
+        // 监听点击事件
+        chartInstance.on('click', function (params) {
+            if(params.componentType === 'series') {
+                openModal(params.dataIndex);
+            }
+        });
+        
+        window.addEventListener('resize', () => chartInstance.resize());
+    }
+
+    // 渲染更新图表与数据
+    function updateDashboard() {
+        // 先计算基准数据（无提前还款）
+        let tempArr = earlyRepayments;
+        earlyRepayments = [];
+        let baseSim = generateSimulationData();
+        baseTotalInterest = baseSim.totalInterestPaid;
+        let basePMT = baseSim.chartData[0].payment;
+        
+        // 恢复用户操作，计算真实数据
+        earlyRepayments = tempArr;
+        let activeSim = generateSimulationData();
+        let chartData = activeSim.chartData;
+
+        // 更新顶部卡片
+        document.getElementById('stat-initial-payment').innerText = basePMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        
+        let finalPMT = chartData.length > 0 ? chartData[chartData.length - 1].payment : 0;
+        document.getElementById('stat-final-payment').innerText = finalPMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        
+        let saved = baseTotalInterest - activeSim.totalInterestPaid;
+        document.getElementById('stat-saved-interest').innerText = saved.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+
+        // 配置 ECharts 选项
+        // 使用阶梯线 (step: 'end') 能非常直观地展现“提前还款后月供瞬间掉落”的台阶感
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                formatter: function(params) {
+                    let pt = params[0].data;
+                    let str = `<div class="font-bold border-b pb-1 mb-1">${pt.date}</div>`;
+                    str += `当月常规月供：<span class="text-blue-500 font-bold">${pt.payment.toFixed(2)}</span> 元<br/>`;
+                    str += `剩余本金：${(pt.principalRemaining / 10000).toFixed(2)} 万元<br/>`;
+                    if (pt.extra > 0) {
+                        str += `<span class="text-rose-500 font-bold">✨ 本月提前还款：${(pt.extra / 10000).toFixed(2)} 万元</span><br/>`;
+                        str += `<span class="text-xs text-gray-500">点击节点可修改/新增金额</span>`;
+                    } else {
+                        str += `<span class="text-xs text-gray-500">点击此节点可添加提前还款</span>`;
+                    }
+                    return str;
+                }
+            },
+            dataZoom: [
+                { type: 'inside', start: 0, end: 100 },
+                { type: 'slider', start: 0, end: 100, height: 20, bottom: 5 }
+            ],
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: chartData.map(d => d.date),
+                axisLabel: { color: '#6b7280' }
+            },
+            yAxis: {
+                type: 'value',
+                name: '月供 (元)',
+                min: function(value) { return Math.max(0, value.min - 1000); },
+                axisLabel: { color: '#6b7280' },
+                splitLine: { lineStyle: { type: 'dashed', color: '#e5e7eb' } }
+            },
+            series: [
+                {
+                    name: '月供金额',
+                    type: 'line',
+                    step: 'end', // 阶梯折线图，更符合按揭规则
+                    markPoint: {
+                        symbol: 'pin',
+                        symbolSize: 45,
+                        label: { color: '#fff', fontSize: 10, formatter: '{c}' },
+                        itemStyle: { color: '#ef4444' },
+                        data: chartData.filter(d => d.extra > 0).map(d => ({
+                            name: '提前还款',
+                            coord: [d.date, d.payment],
+                            value: (d.extra / 10000) + '万'
+                        }))
+                    },
+                    data: chartData.map(d => ({
+                        value: d.payment,
+                        date: d.date,
+                        payment: d.payment,
+                        principalRemaining: d.principalRemaining,
+                        extra: d.extra,
+                        // 如果有提前还款，突出显示该点
+                        symbolSize: d.extra > 0 ? 12 : 6,
+                        itemStyle: {
+                            color: d.extra > 0 ? '#ef4444' : '#3b82f6',
+                            borderWidth: d.extra > 0 ? 3 : 1
+                        }
+                    })),
+                    lineStyle: { width: 3, color: '#3b82f6' },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
+                            { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
+                        ])
+                    }
+                }
+            ]
+        };
+
+        chartInstance.setOption(option);
+        renderHistoryList(chartData);
+    }
+
+    // 渲染底部的记录列表表格
+    function renderHistoryList(chartData) {
+        const listDiv = document.getElementById('repayment-list');
+        const emptyDiv = document.getElementById('empty-state');
+        const tbody = document.getElementById('history-tbody');
+        
+        if (earlyRepayments.length === 0) {
+            listDiv.classList.add('hidden');
+            emptyDiv.classList.remove('hidden');
+            return;
+        }
+
+        listDiv.classList.remove('hidden');
+        emptyDiv.classList.add('hidden');
+        tbody.innerHTML = '';
+
+        // 按时间线排序
+        let sortedRepayments = [...earlyRepayments].sort((a, b) => a.index - b.index);
+        
+        sortedRepayments.forEach((item) => {
+            // 找到该月供和下个月的月供来计算差值
+            let currentPayment = chartData[item.index].payment;
+            let nextPayment = chartData[item.index + 1] ? chartData[item.index + 1].payment : 0;
+            let savedMonthly = currentPayment - nextPayment;
+            
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-gray-50 transition";
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getMonthString(item.index)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-rose-600 font-bold">${(item.amount / 10000).toFixed(2)} 万元</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-emerald-600 font-bold">↓ 减少 ${savedMonthly.toFixed(2)} 元</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${nextPayment.toFixed(2)} 元</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button onclick="removeRepayment(${item.index})" class="text-red-500 hover:text-red-700 font-medium transition bg-red-50 px-3 py-1 rounded-md">删除</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- Modal 弹窗逻辑 ---
+    const modal = document.getElementById('modal');
+    const modalContent = document.getElementById('modal-content');
+    const inputAmount = document.getElementById('input-amount');
+    const errorMsg = document.getElementById('modal-error');
+    const btnDelete = document.getElementById('btn-delete');
+
+    function openModal(monthIndex) {
+        currentSelectedIndex = monthIndex;
+        document.getElementById('modal-subtitle').innerText = `操作时间节点: ${getMonthString(monthIndex)}`;
+        
+        // 如果该月已经有设置，填入默认值并展示清空按钮
+        let exist = earlyRepayments.find(e => e.index === monthIndex);
+        if (exist) {
+            inputAmount.value = exist.amount / 10000;
+            btnDelete.classList.remove('hidden');
+        } else {
+            inputAmount.value = '';
+            btnDelete.classList.add('hidden');
+        }
+        
+        errorMsg.classList.add('hidden');
+        modal.classList.remove('hidden');
+        // 小小的动画延迟
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95');
+        }, 10);
+        inputAmount.focus();
+    }
+
+    function closeModal() {
+        modal.classList.add('opacity-0');
+        modalContent.classList.add('scale-95');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    function confirmRepayment() {
+        let val = parseFloat(inputAmount.value);
+        if (isNaN(val) || val <= 0) {
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+        
+        let amountInYuan = val * 10000;
+        
+        // 查找是否已存在，存在则更新，不存在则推入
+        let existIndex = earlyRepayments.findIndex(e => e.index === currentSelectedIndex);
+        if (existIndex > -1) {
+            earlyRepayments[existIndex].amount = amountInYuan;
+        } else {
+            earlyRepayments.push({ index: currentSelectedIndex, amount: amountInYuan });
+        }
+
+        // 保存到本地存储
+        saveToLocalStorage();
+
+        closeModal();
+        updateDashboard();
+    }
+
+    // 暴露给外部按钮使用
+    window.removeRepayment = function(index) {
+        earlyRepayments = earlyRepayments.filter(e => e.index !== index);
+        
+        // 删除后同步更新本地存储
+        saveToLocalStorage();
+        
+        updateDashboard();
+        closeModal(); // 如果从弹窗内点击删除，顺便关闭弹窗
+    }
+
+    // 绑定事件
+    document.getElementById('btn-cancel').addEventListener('click', closeModal);
+    document.getElementById('btn-confirm').addEventListener('click', confirmRepayment);
+    document.getElementById('btn-delete').addEventListener('click', () => removeRepayment(currentSelectedIndex));
+    inputAmount.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') confirmRepayment();
+    });
+
+    // 启动系统
+    window.onload = () => {
+        initChart();
+        updateDashboard();
+    };
+
+</script>
+</body>
+</html>
