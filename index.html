@@ -529,6 +529,56 @@
         let finalAge = Math.max(0, finalYear - birthYear - (finalMonth < birthMonth ? 1 : 0));
 
         sortedRepayments.forEach((item, loopIndex) => {
+            // 新增：计算距离上次还款的间隔和需要每月攒的钱
+            let targetYear = parseInt(getMonthString(item.index).split('-')[0], 10);
+            let targetMonth = parseInt(getMonthString(item.index).split('-')[1], 10);
+            let monthsGap = 0;
+
+            if (loopIndex === 0) {
+                // 如果是第一笔，获取现实世界当前的年月
+                let now = new Date();
+                let currentYear = now.getFullYear();
+                let currentMonth = now.getMonth() + 1;
+                monthsGap = (targetYear - currentYear) * 12 + (targetMonth - currentMonth);
+            } else {
+                // 如果是后续笔，计算与上一笔的月份差
+                monthsGap = item.index - sortedRepayments[loopIndex - 1].index;
+            }
+
+            // 绘制间隔提示行 (精美的时间轴 Badge 设计)
+            const gapTr = document.createElement('tr');
+            if (monthsGap > 0) {
+                let monthlySave = item.amount / monthsGap;
+                let gapText = loopIndex === 0 ? `距今约 ${monthsGap} 个月` : `间隔 ${monthsGap} 个月`;
+                gapTr.innerHTML = `
+                    <td colspan="5" class="p-0 border-0 bg-gray-50/30">
+                        <div class="flex items-center justify-center py-2 relative">
+                            <div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 ml-10"></div>
+                            <span class="mx-4 text-xs text-blue-600 bg-blue-50 border border-blue-100/50 px-4 py-1.5 rounded-full shadow-[0_2px_10px_-3px_rgba(59,130,246,0.3)] flex items-center gap-2 z-10 transition-transform hover:scale-105">
+                                <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                ${gapText}，期间需每月攒 <strong class="text-blue-700 font-bold text-[13px] ml-1">¥ ${Math.round(monthlySave).toLocaleString('zh-CN')}</strong>
+                            </span>
+                            <div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 mr-10"></div>
+                        </div>
+                    </td>
+                `;
+            } else {
+                let textInfo = loopIndex === 0 ? "当月或历史操作" : "同月操作";
+                gapTr.innerHTML = `
+                    <td colspan="5" class="p-0 border-0 bg-gray-50/30">
+                        <div class="flex items-center justify-center py-2 relative">
+                            <div class="h-px bg-gray-100 flex-1 ml-10"></div>
+                            <span class="mx-4 text-xs text-gray-400 bg-gray-50 border border-gray-100 px-3 py-1 rounded-full flex items-center gap-1 z-10">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                ${textInfo}，已一次性准备
+                            </span>
+                            <div class="h-px bg-gray-100 flex-1 mr-10"></div>
+                        </div>
+                    </td>
+                `;
+            }
+            tbody.appendChild(gapTr);
+
             // 精确计算操作时的年龄
             let year = parseInt(getMonthString(item.index).split('-')[0], 10);
             let month = parseInt(getMonthString(item.index).split('-')[1], 10);
