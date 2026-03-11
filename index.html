@@ -245,8 +245,8 @@
         return `${y}-${m.toString().padStart(2, '0')}`;
     }
 
-    // 生成整个周期的推演数据
-    function generateSimulationData() {
+    // 生成整个周期的推演数据 (支持传入自定义的 earlyRepayments 数组用于预测)
+    function generateSimulationData(repaymentsData = earlyRepayments) {
         let p = CONFIG.principal;
         let r = CONFIG.annualRate / 12;
         let n = CONFIG.totalMonths;
@@ -257,7 +257,7 @@
         let totalInterestPaid = 0;
 
         for (let i = 0; i < CONFIG.totalMonths; i++) {
-            let earlyObj = earlyRepayments.find(e => e.index === i);
+            let earlyObj = repaymentsData.find(e => e.index === i);
             let earlyExtra = earlyObj ? earlyObj.amount : 0;
             let earlyMode = earlyObj ? (earlyObj.mode || 'reduce_payment') : null;
 
@@ -335,15 +335,12 @@
     // 渲染更新图表与数据
     function updateDashboard() {
         // 先计算基准数据（无提前还款）
-        let tempArr = earlyRepayments;
-        earlyRepayments = [];
-        let baseSim = generateSimulationData();
+        let baseSim = generateSimulationData([]);
         baseTotalInterest = baseSim.totalInterestPaid;
         let basePMT = baseSim.chartData[0].payment;
         
-        // 恢复用户操作，计算真实数据
-        earlyRepayments = tempArr;
-        let activeSim = generateSimulationData();
+        // 计算真实数据
+        let activeSim = generateSimulationData(earlyRepayments);
         let chartData = activeSim.chartData;
 
         // 提取真实的还款月份数据
@@ -526,7 +523,7 @@
         let finalMonth = parseInt(finalEndDate.split('-')[1], 10);
         let finalAge = Math.max(0, finalYear - birthYear - (finalMonth < birthMonth ? 1 : 0));
 
-        sortedRepayments.forEach((item) => {
+        sortedRepayments.forEach((item, loopIndex) => {
             // 精确计算操作时的年龄
             let year = parseInt(getMonthString(item.index).split('-')[0], 10);
             let month = parseInt(getMonthString(item.index).split('-')[1], 10);
@@ -548,7 +545,30 @@
                 modeBadge = `<span class="bg-purple-50 text-purple-600 px-2 py-1 rounded text-xs font-bold border border-purple-100">缩时间</span>`;
                 
                 let currentPayment = chartData.find(d => d.index === item.index)?.payment || 0;
-                effectHtml = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供维持 <span class="font-bold text-blue-600">${currentPayment.toFixed(2)}</span> 元 <span class="text-xs text-gray-400 ml-1">(本金骤降，加速结清)</span></td>`;
+                
+                // 计算本次操作所缩短的时间
+                // 逻辑：计算“不包含本次操作的之前的记录”算出的结清月数，减去“包含本次及之前的记录”算出的结清月数
+                let previousRepayments = sortedRepayments.slice(0, loopIndex);
+                let currentRepayments = sortedRepayments.slice(0, loopIndex + 1);
+                
+                let previousSim = generateSimulationData(previousRepayments).chartData.filter(d => d.payment > 0);
+                let currentSim = generateSimulationData(currentRepayments).chartData.filter(d => d.payment > 0);
+                
+                let savedMonthsByThisAction = previousSim.length - currentSim.length;
+                let savedTimeStr = "";
+                if (savedMonthsByThisAction > 0) {
+                    let y = Math.floor(savedMonthsByThisAction / 12);
+                    let m = savedMonthsByThisAction % 12;
+                    if (y > 0) {
+                        savedTimeStr = `↓ ${y}年${m}个月`;
+                    } else {
+                        savedTimeStr = `↓ ${m}个月`;
+                    }
+                } else {
+                    savedTimeStr = "无变化"; // 理论上不会走到这，除非还款额极小
+                }
+
+                effectHtml = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供维持 <span class="font-bold text-blue-600">${currentPayment.toFixed(2)}</span> 元 <span class="text-xs text-emerald-500 font-bold ml-1">(${savedTimeStr})</span></td>`;
             }
 
             const tr = document.createElement('tr');
@@ -576,6 +596,16 @@
             birthYear = val;
             saveToLocalStorage();
             updateDashboard(); // 年份改变后重新渲染图表
+        }
+    });
+
+    // 监听出生月份的变化
+    document.getElementById('select-birth-month').addEventListener('change', function(e) {
+        let val = parseInt(e.target.value, 10);
+        if (!isNaN(val) && val >= 1 && val <= 12) {
+            birthMonth = val;
+            saveToLocalStorage();
+            updateDashboard(); // 月份改变后重新渲染图表
         }
     });
 
