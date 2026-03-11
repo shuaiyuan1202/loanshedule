@@ -71,9 +71,12 @@
                 <p class="text-sm font-bold text-blue-500 hidden bg-blue-50 px-2 py-0.5 rounded" id="stat-saved-time"></p>
             </div>
         </div>
-        <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-rose-500">
+        <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-emerald-400 flex flex-col justify-center">
             <h3 class="text-sm font-medium text-gray-500">累计为您节省利息</h3>
-            <p class="text-2xl font-bold text-rose-600 mt-1" id="stat-saved-interest">0 元</p>
+            <p class="text-2xl font-bold text-emerald-600 mt-1" id="stat-saved-interest">0 元</p>
+            <div class="text-xs text-gray-500 mt-2 bg-gray-50 px-2 py-1 rounded inline-block w-fit border border-gray-100">
+                预计总付利息: <span class="text-rose-500 font-bold" id="stat-total-interest">0 元</span>
+            </div>
         </div>
     </div>
 
@@ -373,9 +376,11 @@
             card3Badge.classList.add('hidden');
         }
         
-        // 更新顶部卡片 4 (节省利息)
+        // 更新顶部卡片 4 (节省利息与总支付利息)
         let saved = baseTotalInterest - activeSim.totalInterestPaid;
+        let totalPaid = activeSim.totalInterestPaid;
         document.getElementById('stat-saved-interest').innerText = saved.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        document.getElementById('stat-total-interest').innerText = totalPaid.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
 
         // 配置 ECharts 选项
         // 使用阶梯线 (step: 'end') 能非常直观地展现“提前还款后月供瞬间掉落”的台阶感
