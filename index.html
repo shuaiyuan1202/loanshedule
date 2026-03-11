@@ -27,28 +27,19 @@
         </div>
         
         <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <!-- 新增：出生年月配置 -->
+            <!-- 出生年月配置 -->
             <div class="flex items-center bg-white px-4 py-3 rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                 <label class="text-sm font-medium text-gray-700 whitespace-nowrap mr-2">出生年月:</label>
                 <input type="number" id="input-birth-year" value="1995" class="form-input w-20 rounded-md border-gray-300 border px-2 py-1 text-sm focus:border-blue-500 focus:ring-blue-500 text-center font-bold text-blue-600">
                 <span class="mx-1 text-gray-500 text-sm whitespace-nowrap">年</span>
                 <select id="select-birth-month" class="w-16 rounded-md border-gray-300 border px-2 py-1 text-sm focus:border-blue-500 focus:ring-blue-500 text-center font-bold text-blue-600 bg-white">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                    <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                    <option value="10">10</option><option value="11">11</option><option value="12">12</option>
                 </select>
                 <span class="ml-1 text-gray-500 text-sm whitespace-nowrap">月</span>
             </div>
-            <!-- 移除全局还款策略选择，下放到每次操作中 -->
         </div>
     </div>
 
@@ -81,12 +72,24 @@
     </div>
 
     <!-- 图表区 (全宽) -->
-    <div class="bg-white rounded-xl shadow-sm p-4 relative mb-6">
-        <div class="mb-2 flex justify-between items-center">
-            <h2 class="text-lg font-bold text-gray-800">月供变化曲线 (点击曲线上任意节点添加提前还款)</h2>
-            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">支持鼠标滚轮缩放</span>
+    <div id="chart-card" class="bg-white rounded-xl shadow-sm p-4 relative mb-6 border-2 border-transparent">
+        <div class="mb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <h2 class="text-lg font-bold text-gray-800">月供变化曲线</h2>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded hidden sm:inline-block">点击曲线添加 / 拖拽标记移动 / 滚轮缩放</span>
+            </div>
         </div>
-        <div id="chart-container" style="width: 100%; height: 500px;"></div>
+        
+        <!-- 核心重构：包装容器，用于安全承载图表和拖拽跟随提示标签 -->
+        <div class="relative w-full h-[500px]">
+            <div id="chart-container" class="w-full h-full"></div>
+            
+            <!-- 原生 DOM 拖拽指示标签，彻底绕过 ECharts 内部渲染机制，100% 稳定跟手 -->
+            <div id="drag-tooltip" class="absolute hidden bg-blue-900 text-white px-3 py-1.5 rounded-lg shadow-xl pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full whitespace-nowrap text-center before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-blue-900 transition-none" style="margin-top: -8px;">
+                <div class="text-[10px] text-blue-200 leading-none mb-1 font-normal tracking-wide">释放移至</div>
+                <div class="text-sm font-bold leading-none tracking-wide" id="drag-tooltip-text">2026-03</div>
+            </div>
+        </div>
     </div>
 
     <!-- 操作与历史记录区 (底部详情表格) -->
@@ -112,7 +115,6 @@
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200" id="history-tbody">
-                    <!-- 表格行将通过 JS 动态插入这里 -->
                 </tbody>
             </table>
         </div>
@@ -141,32 +143,22 @@
             <div class="grid grid-cols-2 gap-3">
                 <label class="relative flex cursor-pointer rounded-lg border bg-white p-3 shadow-sm focus:outline-none">
                     <input type="radio" name="modal-mode" value="reduce_payment" class="sr-only" checked>
-                    <span class="flex flex-1">
-                        <span class="flex flex-col">
-                            <span class="block text-sm font-medium text-gray-900">减月供</span>
-                            <span class="mt-1 flex items-center text-xs text-gray-500">年限不变</span>
-                        </span>
-                    </span>
+                    <span class="flex flex-1"><span class="flex flex-col"><span class="block text-sm font-medium text-gray-900">减月供</span><span class="mt-1 flex items-center text-xs text-gray-500">年限不变</span></span></span>
                     <svg class="h-5 w-5 text-blue-600 hidden modal-mode-check" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-                    <span class="pointer-events-none absolute -inset-px rounded-lg border-2 border-transparent modal-mode-border" aria-hidden="true"></span>
+                    <span class="pointer-events-none absolute -inset-px rounded-lg border-2 border-transparent modal-mode-border"></span>
                 </label>
 
                 <label class="relative flex cursor-pointer rounded-lg border bg-white p-3 shadow-sm focus:outline-none">
                     <input type="radio" name="modal-mode" value="shorten_time" class="sr-only">
-                    <span class="flex flex-1">
-                        <span class="flex flex-col">
-                            <span class="block text-sm font-medium text-gray-900">缩时间</span>
-                            <span class="mt-1 flex items-center text-xs text-gray-500">月供不变</span>
-                        </span>
-                    </span>
+                    <span class="flex flex-1"><span class="flex flex-col"><span class="block text-sm font-medium text-gray-900">缩时间</span><span class="mt-1 flex items-center text-xs text-gray-500">月供不变</span></span></span>
                     <svg class="h-5 w-5 text-blue-600 hidden modal-mode-check" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-                    <span class="pointer-events-none absolute -inset-px rounded-lg border-2 border-transparent modal-mode-border" aria-hidden="true"></span>
+                    <span class="pointer-events-none absolute -inset-px rounded-lg border-2 border-transparent modal-mode-border"></span>
                 </label>
             </div>
         </div>
 
         <div class="mt-6 flex justify-between items-center">
-            <button id="btn-delete" class="px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition hidden">清空此记录</button>
+            <button id="btn-delete" class="px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition hidden">清空记录</button>
             <div class="flex gap-3 ml-auto">
                 <button id="btn-cancel" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">取消</button>
                 <button id="btn-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md">确认执行</button>
@@ -185,70 +177,56 @@
         totalMonths: 304       // 到2051年7月正好剩余 304 个月
     };
 
-    // 状态管理：存放用户的提前还款操作 { index: 整数(距离起始的月数), amount: 金额(元), mode: 'reduce_payment' | 'shorten_time' }
     let earlyRepayments = []; 
-    let birthYear = 1995; // 默认出生年份
-    let birthMonth = 1;   // 默认出生月份
+    let birthYear = 1995;
+    let birthMonth = 1;
+    let cachedChartData = []; 
+    let currentSelectedIndex = 0;
+    let isDraggingGraphic = false; // 拖拽安全锁
     
-    // 初始化时从本地存储读取历史配置
+    // 初始化本地存储
     try {
         const savedData = localStorage.getItem('mortgage_repayments_v1');
         if (savedData) {
             const parsed = JSON.parse(savedData);
-            // 兼容之前只存了数组的情况
-            if (Array.isArray(parsed)) {
-                earlyRepayments = parsed;
-            } else {
+            if (Array.isArray(parsed)) { earlyRepayments = parsed; } 
+            else {
                 earlyRepayments = parsed.repayments || [];
                 if (parsed.birthYear) birthYear = parsed.birthYear;
                 if (parsed.birthMonth) birthMonth = parsed.birthMonth;
             }
-            
-            // 兼容历史遗留数据：确保每条记录都有 mode 字段，没有则默认使用“减月供”策略
             earlyRepayments = earlyRepayments.map(item => ({
-                index: item.index,
-                amount: item.amount,
-                mode: item.mode || 'reduce_payment' 
+                index: item.index, amount: item.amount, mode: item.mode || 'reduce_payment' 
             }));
         }
-    } catch (e) {
-        console.error('加载历史记录失败', e);
-    }
+    } catch (e) { console.error(e); }
 
-    // 更新页面上的输入框及单选框初始值
     document.getElementById('input-birth-year').value = birthYear;
     document.getElementById('select-birth-month').value = birthMonth;
 
-    // 辅助函数：将配置保存到本地存储
     function saveToLocalStorage() {
         localStorage.setItem('mortgage_repayments_v1', JSON.stringify({
-            repayments: earlyRepayments,
-            birthYear: birthYear,
-            birthMonth: birthMonth
+            repayments: earlyRepayments, birthYear: birthYear, birthMonth: birthMonth
         }));
     }
 
-    let currentSelectedIndex = 0; // 当前选中的图表月份索引
     let chartInstance = null;
-    let baseTotalInterest = 0; // 基准总利息（不提前还款的情况）
-    let lastRenderedYear = -1; // 记录 ECharts 当前渲染周期内最新渲染的年份
-    let formatterResetTimer = null; // 用于重置渲染周期的防抖定时器
+    let baseTotalInterest = 0;
+    let lastRenderedYear = -1;
+    let formatterResetTimer = null;
 
     // --- 核心数学计算 ---
-    // 等额本息月供计算公式
     function calculatePMT(principal, monthlyRate, months) {
         if (principal <= 0) return 0;
         return principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
     }
 
-    // 将月索引转换为 YYYY-MM 格式
     function getMonthString(index) {
         let y = CONFIG.startYear + Math.floor((CONFIG.startMonth - 1 + index) / 12);
         let m = ((CONFIG.startMonth - 1 + index) % 12) + 1;
         return `${y}-${m.toString().padStart(2, '0')}`;
     }
 
-    // 生成整个周期的推演数据 (支持传入自定义的 earlyRepayments 数组用于预测)
     function generateSimulationData(repaymentsData = earlyRepayments) {
         let p = CONFIG.principal;
         let r = CONFIG.annualRate / 12;
@@ -265,430 +243,378 @@
             let earlyMode = earlyObj ? (earlyObj.mode || 'reduce_payment') : null;
 
             if (p <= 0.01) {
-                // 已提前还清，后续月份全部填充为 0，保持 X 轴时间刻度固定
                 data.push({
-                    index: i,
-                    date: getMonthString(i),
-                    payment: 0,
-                    principalRemaining: 0,
-                    extra: earlyExtra, // 允许用户在已还清阶段继续尝试点按
-                    mode: earlyMode
+                    index: i, date: getMonthString(i), payment: 0, principalRemaining: 0, extra: earlyExtra, mode: earlyMode
                 });
                 continue;
             }
 
             let interest = p * r;
-            
-            // 如果最后一期常规月供超过了剩余本息和，按实际剩余本息结算
             let actualPMT = currentPMT;
-            if (p * (1 + r) < currentPMT) {
-                actualPMT = p * (1 + r);
-            }
+            if (p * (1 + r) < currentPMT) { actualPMT = p * (1 + r); }
             let normalPrincipalPaid = actualPMT - interest;
 
-            // 记录当月数据 (出图用)
             data.push({
-                index: i,
-                date: getMonthString(i),
-                payment: actualPMT, // 本月月供
-                principalRemaining: p,
-                extra: earlyExtra,
-                mode: earlyMode // 记录本月操作模式
+                index: i, date: getMonthString(i), payment: actualPMT, principalRemaining: p, extra: earlyExtra, mode: earlyMode
             });
 
-            // 结算当月本金
             totalInterestPaid += interest;
             p -= normalPrincipalPaid;
             
             if (earlyExtra > 0) {
                 p -= earlyExtra;
-                if (p < 0) p = 0; // 防止负数本金
-                
-                if (p > 0) {
-                    // 如果是缩减月供模式，重新计算月供；缩短时间模式则 currentPMT 维持不变
-                    if (earlyMode === 'reduce_payment') {
-                        let remainingMonths = CONFIG.totalMonths - i - 1;
-                        if (remainingMonths > 0) {
-                            currentPMT = calculatePMT(p, r, remainingMonths);
-                        }
-                    }
+                if (p < 0) p = 0;
+                if (p > 0 && earlyMode === 'reduce_payment') {
+                    let remainingMonths = CONFIG.totalMonths - i - 1;
+                    if (remainingMonths > 0) currentPMT = calculatePMT(p, r, remainingMonths);
                 }
             }
         }
-
         return { chartData: data, totalInterestPaid };
     }
 
-    // --- UI 与 交互 ---
-    
-    // 初始化图表
-    function initChart() {
-        chartInstance = echarts.init(document.getElementById('chart-container'));
-        
-        // 监听点击事件
-        chartInstance.on('click', function (params) {
-            if(params.componentType === 'series') {
-                openModal(params.dataIndex);
+    // 为图表数据附带“效果文案”
+    function enrichChartDataWithEffects(chartData, sortedRepayments) {
+        sortedRepayments.forEach((item, loopIndex) => {
+            let dataPoint = chartData.find(d => d.index === item.index);
+            if (!dataPoint) return;
+            
+            if (item.mode === 'reduce_payment') {
+                let nextData = chartData.find(d => d.index === item.index + 1);
+                let savedMonthly = dataPoint.payment - (nextData ? nextData.payment : 0);
+                dataPoint.effectText = `立减月供：${savedMonthly.toFixed(2)} 元`;
+            } else {
+                let previousRepayments = sortedRepayments.slice(0, loopIndex);
+                let currentRepayments = sortedRepayments.slice(0, loopIndex + 1);
+                let previousSim = generateSimulationData(previousRepayments).chartData.filter(d => d.payment > 0);
+                let currentSim = generateSimulationData(currentRepayments).chartData.filter(d => d.payment > 0);
+                
+                let savedMonthsByThisAction = previousSim.length - currentSim.length;
+                if (savedMonthsByThisAction > 0) {
+                    let y = Math.floor(savedMonthsByThisAction / 12);
+                    let m = savedMonthsByThisAction % 12;
+                    dataPoint.effectText = `刑期缩短：${y > 0 ? y + '年' : ''}${m}个月`;
+                } else {
+                    dataPoint.effectText = `加速结清进程`;
+                }
             }
         });
-        
-        window.addEventListener('resize', () => chartInstance.resize());
+        return chartData;
     }
 
-    // 渲染更新图表与数据
-    function updateDashboard() {
-        // 先计算基准数据（无提前还款）
-        let baseSim = generateSimulationData([]);
-        baseTotalInterest = baseSim.totalInterestPaid;
-        let basePMT = baseSim.chartData[0].payment;
+    // --- 图表与 UI 渲染 ---
+    function initChart() {
+        chartInstance = echarts.init(document.getElementById('chart-container'));
+        chartInstance.on('click', function (params) {
+            if(params.componentType === 'series') { openModal(params.dataIndex); }
+        });
         
-        // 计算真实数据
-        let activeSim = generateSimulationData(earlyRepayments);
-        let chartData = activeSim.chartData;
+        chartInstance.on('dataZoom', updateDraggableGraphics);
 
-        // 提取真实的还款月份数据
-        let validData = chartData.filter(d => d.payment > 0);
+        window.addEventListener('resize', () => { 
+            if (chartInstance) chartInstance.resize(); 
+            updateDraggableGraphics();
+        });
+    }
 
-        // 提取最小的“常规”月供（忽略可能存在的最后一期极小的尾款）
-        let regularPayments = validData.length > 1 ? validData.slice(0, -1).map(d => d.payment) : [validData[0]?.payment || 0];
-        let minPMT = Math.min(...regularPayments);
-
-        // 更新顶部卡片 1 (基准月供)
-        document.getElementById('stat-initial-payment').innerText = basePMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
-        
-        // 更新顶部卡片 2 (当前最低月供)
-        document.getElementById('stat-final-payment').innerText = minPMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
-        
-        // 更新顶部卡片 3 (结清时间)
-        let finalDate = validData.length > 0 ? validData[validData.length - 1].date : getMonthString(0);
-        document.getElementById('stat-final-date').innerText = finalDate;
-        
-        let card3Badge = document.getElementById('stat-saved-time');
-        // 计算提前了多少时间
-        let savedMonths = CONFIG.totalMonths - validData.length;
-        if (savedMonths > 0) {
-            let savedYears = Math.floor(savedMonths / 12);
-            let savedM = savedMonths % 12;
-            let timeStr = savedYears > 0 ? `${savedYears}年${savedM}个月` : `${savedM}个月`;
-            card3Badge.innerText = `提前 ${timeStr} 结清`;
-            card3Badge.classList.remove('hidden');
-        } else {
-            card3Badge.classList.add('hidden');
-        }
-        
-        // 更新顶部卡片 4 (节省利息与总支付利息)
-        let saved = baseTotalInterest - activeSim.totalInterestPaid;
-        let totalPaid = activeSim.totalInterestPaid;
-        document.getElementById('stat-saved-interest').innerText = saved.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
-        document.getElementById('stat-total-interest').innerText = totalPaid.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
-
-        // 配置 ECharts 选项
-        // 使用阶梯线 (step: 'end') 能非常直观地展现“提前还款后月供瞬间掉落”的台阶感
-        const option = {
+    function buildChartOption(fullChartData, zoomStart = 0, zoomEnd = 100) {
+        return {
             tooltip: {
                 trigger: 'axis',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderColor: '#3b82f6',
+                borderWidth: 1,
+                padding: 12,
+                shadowBlur: 10,
+                shadowColor: 'rgba(59, 130, 246, 0.3)',
                 formatter: function(params) {
                     let pt = params[0].data;
                     let year = parseInt(pt.date.split('-')[0], 10);
                     let month = parseInt(pt.date.split('-')[1], 10);
-                    
-                    // 精确计算年龄：当前年份减去出生年份，如果当前月份小于出生月份，则年龄减1
                     let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
                     
-                    let str = `<div class="font-bold border-b pb-1 mb-1">${pt.date} <span class="text-orange-500 font-normal ml-1">(${currentAge}岁)</span></div>`;
+                    let str = `<div class="font-bold border-b pb-1 mb-2 text-base">${pt.date} <span class="text-orange-500 font-normal ml-1">(${currentAge}岁)</span></div>`;
                     
                     if (pt.payment <= 0.01) {
-                        str += `<span class="text-emerald-500 font-bold text-[14px]">🎉 此时已提前结清房贷，月供为 0</span><br/>`;
+                        str += `<div class="text-emerald-500 font-bold text-[15px] py-1">🎉 此时已提前结清，无需还款</div>`;
                     } else {
-                        str += `当月常规月供：<span class="text-blue-500 font-bold">${pt.payment.toFixed(2)}</span> 元<br/>`;
-                        str += `剩余本金：${(pt.principalRemaining / 10000).toFixed(2)} 万元<br/>`;
+                        str += `<div class="text-gray-600 mb-1">当月需还：<span class="text-blue-600 font-bold text-lg">${pt.payment.toFixed(2)}</span> 元</div>`;
+                        str += `<div class="text-gray-500 text-sm">剩余本金：${(pt.principalRemaining / 10000).toFixed(2)} 万</div>`;
                     }
 
                     if (pt.extra > 0) {
-                        let modeText = pt.mode === 'shorten_time' ? '缩短年限' : '减小月供';
-                        str += `<span class="text-rose-500 font-bold mt-1 inline-block">✨ 本月提前还款：${(pt.extra / 10000).toFixed(2)} 万元 [${modeText}]</span><br/>`;
-                        str += `<span class="text-xs text-gray-500">点击节点可修改/新增金额</span>`;
-                    } else if (pt.payment > 0.01) {
-                        str += `<span class="text-xs text-gray-500">点击此节点可添加提前还款</span>`;
+                        let effectColor = pt.mode === 'shorten_time' ? 'text-purple-600' : 'text-emerald-600';
+                        str += `<div class="mt-3 pt-2 border-t border-dashed border-gray-200 bg-rose-50 -mx-3 px-3 pb-2 rounded-b">`;
+                        str += `<div class="text-rose-600 font-bold text-[15px]">💰 提前还款：${(pt.extra / 10000).toFixed(2)} 万</div>`;
+                        str += `<div class="font-medium ${effectColor} mt-1 flex items-center gap-1"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" /></svg>${pt.effectText}</div>`;
+                        str += `</div>`;
                     }
                     return str;
                 }
             },
             dataZoom: [
-                { type: 'inside', start: 0, end: 100 },
-                { type: 'slider', start: 0, end: 100, height: 20, bottom: 5 }
+                { type: 'inside', start: zoomStart, end: zoomEnd },
+                { type: 'slider', start: zoomStart, end: zoomEnd, height: 20, bottom: 5 }
             ],
-            grid: { left: '3%', right: '4%', bottom: '15%', top: '5%', containLabel: true },
+            grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
             xAxis: {
-                type: 'category',
-                boundaryGap: false,
-                data: chartData.map(d => d.date),
+                type: 'category', boundaryGap: false, data: fullChartData.map(d => d.date),
                 axisLabel: { 
                     color: '#6b7280',
-                    // 新增：智能年龄感知格式化
                     formatter: function (value) {
-                        let parts = value.split('-');
-                        let year = parseInt(parts[0], 10);
-                        let month = parseInt(parts[1], 10);
-                        
-                        // 利用防抖定时器：在 ECharts 每次执行完完整的刻度渲染后，重置记忆状态
-                        clearTimeout(formatterResetTimer);
-                        formatterResetTimer = setTimeout(() => { lastRenderedYear = -1; }, 50);
-
+                        let parts = value.split('-'); let year = parseInt(parts[0], 10); let month = parseInt(parts[1], 10);
+                        clearTimeout(formatterResetTimer); formatterResetTimer = setTimeout(() => { lastRenderedYear = -1; }, 50);
                         let str = `{year|${value}}`;
-
-                        // 确保每个渲染周期内，同一年只展示一次最早的可见月份的年龄
                         if (year !== lastRenderedYear) {
-                            lastRenderedYear = year;
-                            let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+                            lastRenderedYear = year; let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
                             str += `\n{age|${currentAge}岁}`;
                         }
                         return str;
                     },
-                    rich: {
-                        year: { color: '#6b7280', lineHeight: 22 },
-                        age: { color: '#ea580c', fontWeight: 'bold', fontSize: 11, backgroundColor: '#ffedd5', padding: [2, 5], borderRadius: 4, align: 'center' }
-                    }
+                    rich: { year: { color: '#6b7280', lineHeight: 22 }, age: { color: '#ea580c', fontWeight: 'bold', fontSize: 11, backgroundColor: '#ffedd5', padding: [2, 5], borderRadius: 4, align: 'center' } }
                 }
             },
             yAxis: {
-                type: 'value',
-                name: '月供 (元)',
-                min: function(value) { return Math.max(0, value.min - 1000); },
-                axisLabel: { color: '#6b7280' },
-                splitLine: { lineStyle: { type: 'dashed', color: '#e5e7eb' } }
+                type: 'value', name: '月供 (元)',
+                max: Math.ceil(fullChartData[0]?.payment || 6500) + 500,
+                axisLabel: { color: '#6b7280' }, splitLine: { lineStyle: { type: 'dashed', color: '#e5e7eb' } }
             },
-            series: [
-                {
-                    name: '月供金额',
-                    type: 'line',
-                    step: 'end', // 阶梯折线图，更符合按揭规则
-                    markPoint: {
-                        symbol: 'pin',
-                        symbolSize: 45,
-                        label: { color: '#fff', fontSize: 10, formatter: '{c}' },
-                        itemStyle: { color: '#ef4444' },
-                        data: chartData.filter(d => d.extra > 0).map(d => ({
-                            name: '提前还款',
-                            coord: [d.date, d.payment],
-                            value: (d.extra / 10000) + '万'
-                        }))
-                    },
-                    data: chartData.map(d => ({
-                        value: d.payment,
-                        date: d.date,
-                        payment: d.payment,
-                        principalRemaining: d.principalRemaining,
-                        extra: d.extra,
-                        // 如果有提前还款，突出显示该点
-                        symbolSize: d.extra > 0 ? 12 : 6,
-                        itemStyle: {
-                            color: d.extra > 0 ? '#ef4444' : '#3b82f6',
-                            borderWidth: d.extra > 0 ? 3 : 1
-                        }
-                    })),
-                    lineStyle: { width: 3, color: '#3b82f6' },
-                    areaStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
-                            { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
-                        ])
-                    }
+            series: [{
+                name: '月供金额', type: 'line', step: 'end',
+                markPoint: {
+                    symbol: 'pin', symbolSize: 50,
+                    label: { color: '#fff', fontSize: 11, formatter: '{c}' },
+                    itemStyle: { color: '#ef4444', shadowBlur: 10, shadowColor: 'rgba(239, 68, 68, 0.5)' },
+                    data: fullChartData.filter(d => d.extra > 0).map(d => ({
+                        name: '提前还款', coord: [d.date, d.payment], value: (d.extra / 10000) + '万'
+                    }))
+                },
+                data: fullChartData.map(d => ({
+                    name: d.date,
+                    value: [d.date, d.payment], 
+                    date: d.date, payment: d.payment, principalRemaining: d.principalRemaining, extra: d.extra, mode: d.mode, effectText: d.effectText,
+                    symbolSize: d.extra > 0 ? 14 : 6,
+                    itemStyle: { color: d.extra > 0 ? '#ef4444' : '#3b82f6', borderWidth: d.extra > 0 ? 3 : 1 }
+                })),
+                lineStyle: { width: 3, color: '#3b82f6' },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(59, 130, 246, 0.5)' }, { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
+                    ])
                 }
-            ]
+            }],
+            animation: true
         };
-
-        chartInstance.setOption(option);
-        renderHistoryList(chartData);
     }
 
-    // 渲染底部的记录列表表格
-    function renderHistoryList(chartData) {
-        const listDiv = document.getElementById('repayment-list');
-        const emptyDiv = document.getElementById('empty-state');
-        const tbody = document.getElementById('history-tbody');
+    // --- 互动拖拽核心引擎 ---
+    function updateDraggableGraphics() {
+        if (!chartInstance || isDraggingGraphic) return;
+
+        let newGraphicElements = [];
+        const dragTooltip = document.getElementById('drag-tooltip');
+        const dragTooltipText = document.getElementById('drag-tooltip-text');
+
+        earlyRepayments.forEach((item) => {
+            let d = cachedChartData.find(data => data.index === item.index);
+            if (!d) return;
+
+            let coord = chartInstance.convertToPixel({seriesIndex: 0}, [getMonthString(item.index), d.payment]);
+            if (!coord) return;
+
+            let gid = 'drag_pin_' + item.index;
+
+            newGraphicElements.push({
+                type: 'circle',
+                id: gid,
+                position: [coord[0], coord[1] - 25], 
+                shape: { r: 30 }, 
+                style: { fill: 'transparent' }, 
+                cursor: 'grab',
+                draggable: true,
+                z: 100,
+                onclick: function () {
+                    if (!isDraggingGraphic) openModal(item.index);
+                },
+                onmouseover: function () {
+                    if (isDraggingGraphic) return;
+                    chartInstance.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: item.index });
+                },
+                onmouseout: function () {
+                    if (isDraggingGraphic) return;
+                    chartInstance.dispatchAction({ type: 'hideTip' });
+                },
+                ondragstart: function (params) {
+                    isDraggingGraphic = true; 
+                    chartInstance.dispatchAction({ type: 'hideTip' }); // 隐藏内置 tooltip
+                    
+                    // 获取当前悬停点信息
+                    let year = parseInt(getMonthString(item.index).split('-')[0], 10);
+                    let month = parseInt(getMonthString(item.index).split('-')[1], 10);
+                    let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+                    
+                    // 唤起并定位自定义 HTML Tooltip
+                    dragTooltipText.innerHTML = `${getMonthString(item.index)} <span class="text-[11px] text-blue-300 font-normal">(${currentAge}岁)</span>`;
+                    dragTooltip.style.left = this.x + 'px';
+                    dragTooltip.style.top = (this.y - 10) + 'px'; // 悬浮于圆点上方
+                    dragTooltip.classList.remove('hidden');
+                },
+                ondrag: function (params) {
+                    this.y = coord[1] - 25; // 锁死 Y 轴
+                    let currentX = this.x;  
+
+                    let pointInGrid = chartInstance.convertFromPixel({seriesIndex: 0}, [currentX, this.y]);
+                    if (!pointInGrid) return;
+
+                    let newXIndex = Math.max(0, Math.min(CONFIG.totalMonths - 1, Math.round(pointInGrid[0])));
+                    
+                    let year = parseInt(getMonthString(newXIndex).split('-')[0], 10);
+                    let month = parseInt(getMonthString(newXIndex).split('-')[1], 10);
+                    let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+                    
+                    // 实时更新 HTML Tooltip 的内容和位置 (完全跟手)
+                    dragTooltipText.innerHTML = `${getMonthString(newXIndex)} <span class="text-[11px] text-blue-300 font-normal">(${currentAge}岁)</span>`;
+                    dragTooltip.style.left = currentX + 'px';
+                    dragTooltip.style.top = (this.y - 10) + 'px'; 
+                },
+                ondragend: function (params) {
+                    let finalX = this.x;
+                    dragTooltip.classList.add('hidden'); // 隐藏拖拽提示框
+
+                    // 使用 setTimeout 避开引擎底层销毁真空期
+                    setTimeout(() => {
+                        isDraggingGraphic = false; 
+
+                        let pointInGrid = chartInstance.convertFromPixel({seriesIndex: 0}, [finalX, coord[1] - 25]);
+                        if (!pointInGrid) {
+                            updateDraggableGraphics(); return;
+                        }
+                        
+                        let newXIndex = Math.max(0, Math.min(CONFIG.totalMonths - 1, Math.round(pointInGrid[0])));
+
+                        let existItemIndex = earlyRepayments.findIndex(e => e.index === item.index);
+                        if (existItemIndex > -1) {
+                            if (newXIndex === item.index) {
+                                updateDraggableGraphics(); return; 
+                            }
+                            let conflict = earlyRepayments.find(e => e.index === newXIndex && e.index !== item.index);
+                            if (!conflict) {
+                                earlyRepayments[existItemIndex].index = newXIndex;
+                                saveToLocalStorage();
+                                updateDashboard(); 
+                            } else {
+                                updateDraggableGraphics(); 
+                            }
+                        }
+                    }, 150);
+                }
+            });
+        });
+
+        chartInstance.setOption({ graphic: newGraphicElements }, { replaceMerge: ['graphic'] });
+    }
+
+    function updateDashboard() {
+        isDraggingGraphic = false; 
+        document.getElementById('drag-tooltip').classList.add('hidden'); // 防御性重置
         
+        let currentZoomStart = 0;
+        let currentZoomEnd = 100;
+        if (chartInstance) {
+            let op = chartInstance.getOption();
+            if (op && op.dataZoom && op.dataZoom.length > 0) {
+                currentZoomStart = op.dataZoom[0].start;
+                currentZoomEnd = op.dataZoom[0].end;
+            }
+        }
+        
+        let baseSim = generateSimulationData([]);
+        baseTotalInterest = baseSim.totalInterestPaid;
+        let basePMT = baseSim.chartData[0].payment;
+        
+        let activeSim = generateSimulationData(earlyRepayments);
+        
+        let sortedRepayments = [...earlyRepayments].sort((a, b) => a.index - b.index);
+        cachedChartData = enrichChartDataWithEffects(activeSim.chartData, sortedRepayments);
+
+        let validData = cachedChartData.filter(d => d.payment > 0);
+        let regularPayments = validData.length > 1 ? validData.slice(0, -1).map(d => d.payment) : [validData[0]?.payment || 0];
+        let minPMT = Math.min(...regularPayments);
+
+        document.getElementById('stat-initial-payment').innerText = basePMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        document.getElementById('stat-final-payment').innerText = minPMT.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        let finalDate = validData.length > 0 ? validData[validData.length - 1].date : getMonthString(0);
+        document.getElementById('stat-final-date').innerText = finalDate;
+        
+        let card3Badge = document.getElementById('stat-saved-time');
+        let savedMonths = CONFIG.totalMonths - validData.length;
+        if (savedMonths > 0) {
+            let y = Math.floor(savedMonths / 12); let m = savedMonths % 12;
+            card3Badge.innerText = `提前 ${y > 0 ? y+'年' : ''}${m}个月结清`;
+            card3Badge.classList.remove('hidden');
+        } else { card3Badge.classList.add('hidden'); }
+        
+        document.getElementById('stat-saved-interest').innerText = (baseTotalInterest - activeSim.totalInterestPaid).toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+        document.getElementById('stat-total-interest').innerText = activeSim.totalInterestPaid.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' 元';
+
+        chartInstance.setOption(buildChartOption(cachedChartData, currentZoomStart, currentZoomEnd), true);
+        updateDraggableGraphics();
+        renderHistoryList(cachedChartData, sortedRepayments);
+    }
+
+    function renderHistoryList(chartData, sortedRepayments) {
+        const tbody = document.getElementById('history-tbody');
         if (earlyRepayments.length === 0) {
-            listDiv.classList.add('hidden');
-            emptyDiv.classList.remove('hidden');
+            document.getElementById('repayment-list').classList.add('hidden');
+            document.getElementById('empty-state').classList.remove('hidden');
             return;
         }
-
-        listDiv.classList.remove('hidden');
-        emptyDiv.classList.add('hidden');
+        document.getElementById('repayment-list').classList.remove('hidden');
+        document.getElementById('empty-state').classList.add('hidden');
         tbody.innerHTML = '';
 
-        // 按时间线排序
-        let sortedRepayments = [...earlyRepayments].sort((a, b) => a.index - b.index);
-        
-        // 提取最终结清时间 (缩短时间模式下极其有用)
-        let validData = chartData.filter(d => d.payment > 0);
-        let finalEndDate = validData.length > 0 ? validData[validData.length - 1].date : chartData[0].date;
-        let finalYear = parseInt(finalEndDate.split('-')[0], 10);
-        let finalMonth = parseInt(finalEndDate.split('-')[1], 10);
-        let finalAge = Math.max(0, finalYear - birthYear - (finalMonth < birthMonth ? 1 : 0));
-
         sortedRepayments.forEach((item, loopIndex) => {
-            // 新增：计算距离上次还款的间隔和需要每月攒的钱
             let targetYear = parseInt(getMonthString(item.index).split('-')[0], 10);
             let targetMonth = parseInt(getMonthString(item.index).split('-')[1], 10);
             let monthsGap = 0;
 
             if (loopIndex === 0) {
-                // 如果是第一笔，获取现实世界当前的年月
                 let now = new Date();
-                let currentYear = now.getFullYear();
-                let currentMonth = now.getMonth() + 1;
-                monthsGap = (targetYear - currentYear) * 12 + (targetMonth - currentMonth);
+                monthsGap = (targetYear - now.getFullYear()) * 12 + (targetMonth - (now.getMonth() + 1));
             } else {
-                // 如果是后续笔，计算与上一笔的月份差
                 monthsGap = item.index - sortedRepayments[loopIndex - 1].index;
             }
 
-            // 绘制间隔提示行 (精美的时间轴 Badge 设计)
             const gapTr = document.createElement('tr');
             if (monthsGap > 0) {
                 let monthlySave = item.amount / monthsGap;
                 let gapText = loopIndex === 0 ? `距今约 ${monthsGap} 个月` : `间隔 ${monthsGap} 个月`;
-                gapTr.innerHTML = `
-                    <td colspan="5" class="p-0 border-0 bg-gray-50/30">
-                        <div class="flex items-center justify-center py-2 relative">
-                            <div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 ml-10"></div>
-                            <span class="mx-4 text-xs text-blue-600 bg-blue-50 border border-blue-100/50 px-4 py-1.5 rounded-full shadow-[0_2px_10px_-3px_rgba(59,130,246,0.3)] flex items-center gap-2 z-10 transition-transform hover:scale-105">
-                                <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                ${gapText}，期间需每月攒 <strong class="text-blue-700 font-bold text-[13px] ml-1">¥ ${Math.round(monthlySave).toLocaleString('zh-CN')}</strong>
-                            </span>
-                            <div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 mr-10"></div>
-                        </div>
-                    </td>
-                `;
+                gapTr.innerHTML = `<td colspan="5" class="p-0 border-0 bg-gray-50/30"><div class="flex items-center justify-center py-2 relative"><div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 ml-10"></div><span class="mx-4 text-xs text-blue-600 bg-blue-50 border border-blue-100/50 px-4 py-1.5 rounded-full shadow-[0_2px_10px_-3px_rgba(59,130,246,0.3)] flex items-center gap-2 z-10 transition-transform hover:scale-105"><svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>${gapText}，期间需每月攒 <strong class="text-blue-700 font-bold text-[13px] ml-1">¥ ${Math.round(monthlySave).toLocaleString('zh-CN')}</strong></span><div class="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent flex-1 mr-10"></div></div></td>`;
             } else {
-                let textInfo = loopIndex === 0 ? "当月或历史操作" : "同月操作";
-                gapTr.innerHTML = `
-                    <td colspan="5" class="p-0 border-0 bg-gray-50/30">
-                        <div class="flex items-center justify-center py-2 relative">
-                            <div class="h-px bg-gray-100 flex-1 ml-10"></div>
-                            <span class="mx-4 text-xs text-gray-400 bg-gray-50 border border-gray-100 px-3 py-1 rounded-full flex items-center gap-1 z-10">
-                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                ${textInfo}，已一次性准备
-                            </span>
-                            <div class="h-px bg-gray-100 flex-1 mr-10"></div>
-                        </div>
-                    </td>
-                `;
+                gapTr.innerHTML = `<td colspan="5" class="p-0 border-0 bg-gray-50/30"><div class="flex items-center justify-center py-2 relative"><div class="h-px bg-gray-100 flex-1 ml-10"></div><span class="mx-4 text-xs text-gray-400 bg-gray-50 border border-gray-100 px-3 py-1 rounded-full flex items-center gap-1 z-10"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>${loopIndex === 0 ? "当月或历史操作" : "同月操作"}，已一次性准备</span><div class="h-px bg-gray-100 flex-1 mr-10"></div></div></td>`;
             }
             tbody.appendChild(gapTr);
 
-            // 精确计算操作时的年龄
+            let dataPoint = chartData.find(d => d.index === item.index);
             let year = parseInt(getMonthString(item.index).split('-')[0], 10);
             let month = parseInt(getMonthString(item.index).split('-')[1], 10);
-            let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
-            let ageStr = `(${currentAge}岁)`;
-
-            let modeBadge, effectHtml;
-
-            if (item.mode === 'reduce_payment' || !item.mode) {
-                modeBadge = `<span class="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold border border-blue-100">减月供</span>`;
-                
-                let currentPayment = chartData.find(d => d.index === item.index)?.payment || 0;
-                let nextData = chartData.find(d => d.index === item.index + 1);
-                let nextPayment = nextData ? nextData.payment : 0;
-                let savedMonthly = currentPayment - nextPayment;
-                
-                effectHtml = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供降至 <span class="font-bold text-emerald-600">${nextPayment.toFixed(2)}</span> 元 <span class="text-xs text-gray-400 ml-1">(↓ ${savedMonthly.toFixed(2)})</span></td>`;
-            } else {
-                modeBadge = `<span class="bg-purple-50 text-purple-600 px-2 py-1 rounded text-xs font-bold border border-purple-100">缩时间</span>`;
-                
-                let currentPayment = chartData.find(d => d.index === item.index)?.payment || 0;
-                
-                // 计算本次操作所缩短的时间
-                // 逻辑：计算“不包含本次操作的之前的记录”算出的结清月数，减去“包含本次及之前的记录”算出的结清月数
-                let previousRepayments = sortedRepayments.slice(0, loopIndex);
-                let currentRepayments = sortedRepayments.slice(0, loopIndex + 1);
-                
-                let previousSim = generateSimulationData(previousRepayments).chartData.filter(d => d.payment > 0);
-                let currentSim = generateSimulationData(currentRepayments).chartData.filter(d => d.payment > 0);
-                
-                let savedMonthsByThisAction = previousSim.length - currentSim.length;
-                let savedTimeStr = "";
-                if (savedMonthsByThisAction > 0) {
-                    let y = Math.floor(savedMonthsByThisAction / 12);
-                    let m = savedMonthsByThisAction % 12;
-                    if (y > 0) {
-                        savedTimeStr = `↓ ${y}年${m}个月`;
-                    } else {
-                        savedTimeStr = `↓ ${m}个月`;
-                    }
-                } else {
-                    savedTimeStr = "无变化"; // 理论上不会走到这，除非还款额极小
-                }
-
-                effectHtml = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供维持 <span class="font-bold text-blue-600">${currentPayment.toFixed(2)}</span> 元 <span class="text-xs text-emerald-500 font-bold ml-1">(${savedTimeStr})</span></td>`;
-            }
+            let ageStr = `(${Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0))}岁)`;
+            
+            let modeBadge = item.mode === 'shorten_time' ? `<span class="bg-purple-50 text-purple-600 px-2 py-1 rounded text-xs font-bold border border-purple-100">缩时间</span>` : `<span class="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold border border-blue-100">减月供</span>`;
+            let currentPayment = dataPoint?.payment || 0;
+            
+            let effectHtml = item.mode === 'reduce_payment' || !item.mode ? 
+                `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供降至 <span class="font-bold text-emerald-600">${chartData.find(d => d.index === item.index + 1)?.payment.toFixed(2)}</span> 元 <span class="text-xs text-emerald-500 font-bold ml-1">(${dataPoint?.effectText})</span></td>` :
+                `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">月供维持 <span class="font-bold text-blue-600">${currentPayment.toFixed(2)}</span> 元 <span class="text-xs text-purple-600 font-bold ml-1">(${dataPoint?.effectText})</span></td>`;
 
             const tr = document.createElement('tr');
             tr.className = "hover:bg-gray-50 transition";
-            tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getMonthString(item.index)} <span class="text-gray-400 text-xs ml-1">${ageStr}</span></td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-rose-600 font-bold">${(item.amount / 10000).toFixed(2)} 万元</td>
-                <td class="px-6 py-4 whitespace-nowrap">${modeBadge}</td>
-                ${effectHtml}
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <button onclick="window.openModal(${item.index})" class="text-blue-500 hover:text-blue-700 font-medium transition bg-blue-50 px-3 py-1 rounded-md mr-2">编辑</button>
-                    <button onclick="window.removeRepayment(${item.index})" class="text-red-500 hover:text-red-700 font-medium transition bg-red-50 px-3 py-1 rounded-md">删除</button>
-                </td>
-            `;
+            tr.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getMonthString(item.index)} <span class="text-gray-400 text-xs ml-1">${ageStr}</span></td><td class="px-6 py-4 whitespace-nowrap text-sm text-rose-600 font-bold">${(item.amount / 10000).toFixed(2)} 万元</td><td class="px-6 py-4 whitespace-nowrap">${modeBadge}</td>${effectHtml}<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><button onclick="window.openModal(${item.index})" class="text-blue-500 hover:text-blue-700 font-medium transition bg-blue-50 px-3 py-1 rounded-md mr-2">编辑</button><button onclick="window.removeRepayment(${item.index})" class="text-red-500 hover:text-red-700 font-medium transition bg-red-50 px-3 py-1 rounded-md">删除</button></td>`;
             tbody.appendChild(tr);
         });
     }
 
-    // --- 事件监听与处理 ---
-    
-    // 监听出生年份的变化
-    document.getElementById('input-birth-year').addEventListener('change', function(e) {
-        let val = parseInt(e.target.value, 10);
-        if (!isNaN(val) && val > 1900 && val < 2100) {
-            birthYear = val;
-            saveToLocalStorage();
-            updateDashboard(); // 年份改变后重新渲染图表
-        }
-    });
-
-    // 监听出生月份的变化
-    document.getElementById('select-birth-month').addEventListener('change', function(e) {
-        let val = parseInt(e.target.value, 10);
-        if (!isNaN(val) && val >= 1 && val <= 12) {
-            birthMonth = val;
-            saveToLocalStorage();
-            updateDashboard(); // 月份改变后重新渲染图表
-        }
-    });
-
-    // Modal 单选框 UI 交互逻辑
-    document.querySelectorAll('input[name="modal-mode"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            // 重置所有样式
-            document.querySelectorAll('input[name="modal-mode"]').forEach(r => {
-                let parent = r.closest('label');
-                parent.classList.remove('border-blue-500', 'bg-blue-50');
-                parent.querySelector('.modal-mode-check').classList.add('hidden');
-                parent.querySelector('.modal-mode-border').classList.replace('border-blue-500', 'border-transparent');
-            });
-            // 激活选中样式
-            if (this.checked) {
-                let parent = this.closest('label');
-                parent.classList.add('bg-blue-50');
-                parent.querySelector('.modal-mode-check').classList.remove('hidden');
-                parent.querySelector('.modal-mode-border').classList.replace('border-transparent', 'border-blue-500');
-            }
-        });
-    });
-
-    // 触发一下默认选中状态的样式
-    document.querySelector('input[name="modal-mode"]:checked').dispatchEvent(new Event('change'));
-
-
-    // --- Modal 弹窗逻辑 ---
+    // --- Modal 交互与其他绑定 ---
     const modal = document.getElementById('modal');
     const modalContent = document.getElementById('modal-content');
     const inputAmount = document.getElementById('input-amount');
@@ -699,16 +625,12 @@
         currentSelectedIndex = monthIndex;
         let year = parseInt(getMonthString(monthIndex).split('-')[0], 10);
         let month = parseInt(getMonthString(monthIndex).split('-')[1], 10);
-        let currentAge = Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0));
+        document.getElementById('modal-subtitle').innerText = `操作时间节点: ${getMonthString(monthIndex)} (${Math.max(0, year - birthYear - (month < birthMonth ? 1 : 0))} 岁)`;
         
-        document.getElementById('modal-subtitle').innerText = `操作时间节点: ${getMonthString(monthIndex)} (${currentAge} 岁)`;
-        
-        // 如果该月已经有设置，填入默认值并展示清空按钮
         let exist = earlyRepayments.find(e => e.index === monthIndex);
         if (exist) {
             inputAmount.value = exist.amount / 10000;
             btnDelete.classList.remove('hidden');
-            // 恢复模式选择
             let mode = exist.mode || 'reduce_payment';
             document.querySelector(`input[name="modal-mode"][value="${mode}"]`).checked = true;
         } else {
@@ -717,38 +639,24 @@
             document.querySelector('input[name="modal-mode"][value="reduce_payment"]').checked = true;
         }
         
-        // 触发样式更新
         document.querySelector('input[name="modal-mode"]:checked').dispatchEvent(new Event('change'));
-        
         errorMsg.classList.add('hidden');
-        modal.classList.remove('hidden');
-        // 小小的动画延迟
-        setTimeout(() => {
-            modal.classList.remove('opacity-0');
-            modalContent.classList.remove('scale-95');
-        }, 10);
+        modal.classList.remove('hidden'); setTimeout(() => { modal.classList.remove('opacity-0'); modalContent.classList.remove('scale-95'); }, 10);
         inputAmount.focus();
     }
 
     function closeModal() {
-        modal.classList.add('opacity-0');
-        modalContent.classList.add('scale-95');
-        setTimeout(() => {
-            modal.classList.add('hidden');
-        }, 300);
+        modal.classList.add('opacity-0'); modalContent.classList.add('scale-95');
+        setTimeout(() => { modal.classList.add('hidden'); }, 300);
     }
 
     function confirmRepayment() {
         let val = parseFloat(inputAmount.value);
-        if (isNaN(val) || val <= 0) {
-            errorMsg.classList.remove('hidden');
-            return;
-        }
+        if (isNaN(val) || val <= 0) { errorMsg.classList.remove('hidden'); return; }
         
         let amountInYuan = val * 10000;
         let selectedMode = document.querySelector('input[name="modal-mode"]:checked').value;
         
-        // 查找是否已存在，存在则更新，不存在则推入
         let existIndex = earlyRepayments.findIndex(e => e.index === currentSelectedIndex);
         if (existIndex > -1) {
             earlyRepayments[existIndex].amount = amountInYuan;
@@ -756,41 +664,29 @@
         } else {
             earlyRepayments.push({ index: currentSelectedIndex, amount: amountInYuan, mode: selectedMode });
         }
-
-        // 保存到本地存储
-        saveToLocalStorage();
-
-        closeModal();
-        updateDashboard();
+        saveToLocalStorage(); closeModal(); updateDashboard();
     }
 
-    // 暴露给外部按钮使用
-    window.openModal = openModal;
-    
-    window.removeRepayment = function(index) {
-        earlyRepayments = earlyRepayments.filter(e => e.index !== index);
-        
-        // 删除后同步更新本地存储
-        saveToLocalStorage();
-        
-        updateDashboard();
-        closeModal(); // 如果从弹窗内点击删除，顺便关闭弹窗
-    }
-
-    // 绑定事件
-    document.getElementById('btn-cancel').addEventListener('click', closeModal);
-    document.getElementById('btn-confirm').addEventListener('click', confirmRepayment);
-    document.getElementById('btn-delete').addEventListener('click', () => removeRepayment(currentSelectedIndex));
-    inputAmount.addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') confirmRepayment();
+    document.querySelectorAll('input[name="modal-mode"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('input[name="modal-mode"]').forEach(r => {
+                let p = r.closest('label'); p.classList.remove('border-blue-500', 'bg-blue-50'); p.querySelector('.modal-mode-check').classList.add('hidden'); p.querySelector('.modal-mode-border').classList.replace('border-blue-500', 'border-transparent');
+            });
+            if (this.checked) { let p = this.closest('label'); p.classList.add('bg-blue-50'); p.querySelector('.modal-mode-check').classList.remove('hidden'); p.querySelector('.modal-mode-border').classList.replace('border-transparent', 'border-blue-500'); }
+        });
     });
 
-    // 启动系统
-    window.onload = () => {
-        initChart();
-        updateDashboard();
-    };
+    document.getElementById('input-birth-year').addEventListener('change', function(e) { let val = parseInt(e.target.value, 10); if (!isNaN(val) && val > 1900 && val < 2100) { birthYear = val; saveToLocalStorage(); updateDashboard(); }});
+    document.getElementById('select-birth-month').addEventListener('change', function(e) { let val = parseInt(e.target.value, 10); if (!isNaN(val) && val >= 1 && val <= 12) { birthMonth = val; saveToLocalStorage(); updateDashboard(); }});
+    window.openModal = openModal;
+    window.removeRepayment = function(index) { earlyRepayments = earlyRepayments.filter(e => e.index !== index); saveToLocalStorage(); updateDashboard(); closeModal(); };
+    document.getElementById('btn-cancel').addEventListener('click', closeModal);
+    document.getElementById('btn-confirm').addEventListener('click', confirmRepayment);
+    document.getElementById('btn-delete').addEventListener('click', () => window.removeRepayment(currentSelectedIndex));
+    document.getElementById('input-amount').addEventListener('keypress', function (e) { if (e.key === 'Enter') confirmRepayment(); });
 
+    // 启动系统
+    window.onload = () => { initChart(); updateDashboard(); };
 </script>
 </body>
 </html>
