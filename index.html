@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>房贷提前还款推演系统</title>
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./icon.svg">
     <!-- 引入 Tailwind CSS 进行样式排版 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 ECharts 进行图表绘制 -->
@@ -11,11 +17,12 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f3f4f6; }
         .modal-bg { background-color: rgba(0, 0, 0, 0.5); }
+        #chart-container { touch-action: pan-y pinch-zoom; }
     </style>
 </head>
 <body class="text-gray-800">
 
-<div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+<div class="max-w-7xl mx-auto p-4 pb-24 sm:p-6 sm:pb-6 lg:p-8 lg:pb-8">
     
     <!-- 头部信息 -->
     <div class="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -93,7 +100,7 @@
     </div>
 
     <!-- 操作与历史记录区 (底部详情表格) -->
-    <div class="bg-white rounded-xl shadow-sm p-6">
+    <div id="details-card" class="bg-white rounded-xl shadow-sm p-6">
         <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">提前还款操作详情</h2>
         
         <div id="empty-state" class="text-center text-gray-400 py-10">
@@ -117,6 +124,19 @@
                 <tbody class="bg-white divide-y divide-gray-200" id="history-tbody">
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div id="mobile-tabbar" class="fixed bottom-0 left-0 right-0 z-40 sm:hidden">
+    <div class="mx-auto max-w-7xl px-4 pb-[env(safe-area-inset-bottom)]">
+        <div class="bg-white/95 backdrop-blur border border-gray-200 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] rounded-2xl px-2 py-2 flex gap-2">
+            <button id="tab-btn-chart" class="flex-1 px-4 py-2 rounded-xl text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-600 text-white" aria-selected="true">
+                曲线
+            </button>
+            <button id="tab-btn-details" class="flex-1 px-4 py-2 rounded-xl text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-100 text-gray-700" aria-selected="false">
+                详情
+            </button>
         </div>
     </div>
 </div>
@@ -410,6 +430,8 @@
     // --- 互动拖拽核心引擎 ---
     function updateDraggableGraphics() {
         if (!chartInstance || isDraggingGraphic) return;
+        const chartCardEl = document.getElementById('chart-card');
+        if (chartCardEl && chartCardEl.classList.contains('hidden')) return;
 
         let newGraphicElements = [];
         const dragTooltip = document.getElementById('drag-tooltip');
@@ -685,8 +707,84 @@
     document.getElementById('btn-delete').addEventListener('click', () => window.removeRepayment(currentSelectedIndex));
     document.getElementById('input-amount').addEventListener('keypress', function (e) { if (e.key === 'Enter') confirmRepayment(); });
 
+    function isMobileLayout() {
+        return window.matchMedia && window.matchMedia('(max-width: 639px)').matches;
+    }
+
+    let activeMobileTab = 'chart';
+
+    function applyMobileTabLayout() {
+        const chartCard = document.getElementById('chart-card');
+        const detailsCard = document.getElementById('details-card');
+        const isMobile = isMobileLayout();
+
+        if (!isMobile) {
+            chartCard.classList.remove('hidden');
+            detailsCard.classList.remove('hidden');
+            return;
+        }
+
+        const showChart = activeMobileTab === 'chart';
+        chartCard.classList.toggle('hidden', !showChart);
+        detailsCard.classList.toggle('hidden', showChart);
+        document.getElementById('drag-tooltip').classList.add('hidden');
+        isDraggingGraphic = false;
+
+        const btnChart = document.getElementById('tab-btn-chart');
+        const btnDetails = document.getElementById('tab-btn-details');
+
+        btnChart.setAttribute('aria-selected', showChart ? 'true' : 'false');
+        btnDetails.setAttribute('aria-selected', showChart ? 'false' : 'true');
+
+        btnChart.classList.toggle('bg-blue-600', showChart);
+        btnChart.classList.toggle('text-white', showChart);
+        btnChart.classList.toggle('bg-gray-100', !showChart);
+        btnChart.classList.toggle('text-gray-700', !showChart);
+
+        btnDetails.classList.toggle('bg-blue-600', !showChart);
+        btnDetails.classList.toggle('text-white', !showChart);
+        btnDetails.classList.toggle('bg-gray-100', showChart);
+        btnDetails.classList.toggle('text-gray-700', showChart);
+
+        if (showChart && chartInstance) {
+            requestAnimationFrame(() => {
+                chartInstance.resize();
+                updateDraggableGraphics();
+            });
+            setTimeout(() => {
+                if (!chartInstance) return;
+                chartInstance.resize();
+                updateDraggableGraphics();
+            }, 120);
+        }
+    }
+
+    function setActiveMobileTab(tabKey) {
+        activeMobileTab = tabKey;
+        applyMobileTabLayout();
+    }
+
+    function registerServiceWorkerIfPossible() {
+        if (!('serviceWorker' in navigator)) return;
+        const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if (location.protocol !== 'https:' && !isLocalhost) return;
+        navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+    }
+
     // 启动系统
-    window.onload = () => { initChart(); updateDashboard(); };
+    window.addEventListener('load', () => {
+        initChart();
+        updateDashboard();
+        registerServiceWorkerIfPossible();
+        applyMobileTabLayout();
+    });
+
+    window.addEventListener('resize', () => {
+        applyMobileTabLayout();
+    });
+
+    document.getElementById('tab-btn-chart').addEventListener('click', () => setActiveMobileTab('chart'));
+    document.getElementById('tab-btn-details').addEventListener('click', () => setActiveMobileTab('details'));
 </script>
 </body>
 </html>

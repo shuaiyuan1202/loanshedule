@@ -1,0 +1,18 @@
+{
+  "name": "房贷提前还款推演系统",
+  "short_name": "房贷推演",
+  "description": "房贷提前还款推演系统：支持添加/拖动提前还款锚点，查看月供曲线与操作详情。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
